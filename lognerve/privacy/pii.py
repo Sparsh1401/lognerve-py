@@ -7,6 +7,10 @@ PiiConfig = Union[bool, Dict[str, Any]]
 DEFAULT_ENTITIES = ["email", "phone", "credit_card", "ssn", "ip_address", "api_key"]
 DEFAULT_REPLACEMENT = "[REDACTED]"
 
+# Strings longer than this are skipped by redaction to bound ReDoS exposure from
+# user-supplied patterns (catastrophic backtracking is triggered by long input).
+MAX_REDACTABLE_LENGTH = 100_000
+
 
 class PiiRedactor:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -46,6 +50,8 @@ class PiiRedactor:
         return value
 
     def _redact_string(self, value: str) -> str:
+        if len(value) > MAX_REDACTABLE_LENGTH:
+            return value
         redacted = value
         for entity, pattern, replacement, validator in self.rules:
             def replace(match):
@@ -80,9 +86,18 @@ def _build_rule(entity: PiiEntity, replacement: str) -> Tuple[str, Pattern[str],
         return (normalized, re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), replacement, None)
     if normalized in ("ip_address", "ipAddress"):
         return (normalized, re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"), replacement, _is_ipv4)
+    # Covers generic prefixed keys (sk_/pk_/rk_/lnv_), OpenAI project keys
+    # (sk-proj-...), Anthropic keys (sk-ant-...), AWS access key ids (AKIA...),
+    # GitHub tokens (ghp_/gho_/ghu_/ghs_/ghr_), and Bearer tokens.
     return (
         normalized,
-        re.compile(r"\b(?:sk|pk|rk|lnv)_[A-Za-z0-9_-]{16,}\b|\bBearer\s+[A-Za-z0-9._\-+/=]{12,}\b"),
+        re.compile(
+            r"\b(?:sk|pk|rk|lnv)_[A-Za-z0-9_-]{16,}\b"
+            r"|\bsk-(?:proj|ant|or)-[A-Za-z0-9_-]{16,}\b"
+            r"|\bAKIA[0-9A-Z]{16}\b"
+            r"|\bgh[pousr]_[A-Za-z0-9]{36,}\b"
+            r"|\bBearer\s+[A-Za-z0-9._\-+/=]{12,}\b"
+        ),
         replacement,
         None,
     )

@@ -49,8 +49,17 @@ def build_headers(api_key=None, otlp_headers=None):
         "x-lognerve-sdk-name": SDK_NAME,
         "x-lognerve-sdk-version": SDK_VERSION,
     }
-    if api_key is not None:
-        headers["Authorization"] = "Bearer " + api_key
     if otlp_headers:
         headers.update(otlp_headers)
+    # Authorization is security-critical: when an api_key is configured it must
+    # not be silently replaced by an injected otlp_headers/LOGNERVE_OTLP_HEADERS
+    # entry (which could redirect telemetry to an attacker-controlled collector).
+    if api_key is not None:
+        for key in [k for k in headers if k.lower() == "authorization"]:
+            if headers[key] != "Bearer " + api_key:
+                logger.warning(
+                    "lognerve: ignoring Authorization header from otlp_headers; the configured api_key takes precedence"
+                )
+            del headers[key]
+        headers["Authorization"] = "Bearer " + api_key
     return headers

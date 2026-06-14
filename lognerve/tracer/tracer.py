@@ -1,3 +1,7 @@
+import logging
+import re
+from urllib.parse import urlparse
+
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -8,6 +12,8 @@ from lognerve.shared.config import read_env
 from lognerve.shared.git import read_git_context
 from lognerve.tracer.processor import LogNerveSpanProcessor
 from lognerve.util.constants import GIT_REF, GIT_REPO
+
+logger = logging.getLogger(__name__)
 
 
 class TraceHandle:
@@ -38,6 +44,7 @@ def create(**config):
         merged["otlp_compression"] = "gzip"
     if merged.get("otlp_endpoint") is None:
         merged["otlp_endpoint"] = f"https://{merged.get('domain') or 'lognerve.ai'}/api/v1/traces"
+    _assert_safe_endpoint(merged["otlp_endpoint"])
     git = read_git_context(merged.get("git_repo"), merged.get("git_ref"))
     attributes = {"service.name": merged.get("service_name") or "lognerve-app", "project.name": merged.get("project_name") or "lognerve-default"}
     if merged.get("environment"):
@@ -59,3 +66,44 @@ def create(**config):
     provider.add_span_processor(BatchSpanProcessor(exporter) if merged.get("batch_export") else SimpleSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
     return TraceHandle(provider)
+
+
+def _assert_safe_endpoint(endpoint: str) -> None:
+    """Validate the resolved export endpoint before any telemetry (which can
+    carry LLM prompts/completions and the API key) leaves the process."""
+    parsed = urlparse(endpoint)
+    if not parsed.scheme or not parsed.netloc:
+        logger.warning("lognerve: invalid otlp_endpoint %r; export may fail", endpoint)
+        return
+    if parsed.scheme != "https":
+        # http:// sends the Authorization: Bearer <api_key> header in cleartext.
+        logger.warning(
+            "lognerve: insecure otlp_endpoint %r — use https:// so the API key and trace data are not sent in plaintext",
+            endpoint,
+        )
+    if _is_private_or_metadata_host(parsed.hostname or ""):
+        # SSRF guard: a poisoned LOGNERVE_DOMAIN/LOGNERVE_OTLP_ENDPOINT could
+        # redirect telemetry to the cloud metadata service or an internal host.
+        logger.warning(
+            "lognerve: otlp_endpoint host %r is a private/link-local address; refusing it as a default target",
+            parsed.hostname,
+        )
+
+
+def _is_private_or_metadata_host(hostname: str) -> bool:
+    host = hostname.strip("[]")
+    if host in ("localhost", "::1"):
+        return True
+    match = re.match(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$", host)
+    if not match:
+        return False
+    a, b = int(match.group(1)), int(match.group(2))
+    if a in (0, 10, 127):
+        return True
+    if a == 172 and 16 <= b <= 31:
+        return True
+    if a == 192 and b == 168:
+        return True
+    if a == 169 and b == 254:  # link-local / cloud metadata
+        return True
+    return False

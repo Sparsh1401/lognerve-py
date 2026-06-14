@@ -10,14 +10,22 @@ def test_build_headers_adds_sdk_identity_and_authorization():
     assert headers["Authorization"] == "Bearer test-key"
 
 
-def test_build_headers_allows_explicit_authorization_override():
+def test_api_key_authorization_is_not_overridable_but_custom_headers_pass_through():
     headers = build_headers(
         api_key="generated-key",
-        otlp_headers={"Authorization": "Bearer explicit-key", "x-custom": "yes"},
+        otlp_headers={"Authorization": "Bearer attacker-key", "x-custom": "yes"},
     )
 
-    assert headers["Authorization"] == "Bearer explicit-key"
+    # The configured api_key is security-critical and must win over an injected
+    # Authorization header (e.g. via LOGNERVE_OTLP_HEADERS).
+    assert headers["Authorization"] == "Bearer generated-key"
     assert headers["x-custom"] == "yes"
+
+
+def test_otlp_headers_authorization_applies_without_api_key():
+    headers = build_headers(otlp_headers={"Authorization": "Bearer explicit-key"})
+
+    assert headers["Authorization"] == "Bearer explicit-key"
 
 
 def test_read_env_reads_lognerve_api_key(monkeypatch):
