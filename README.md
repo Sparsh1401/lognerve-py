@@ -10,7 +10,7 @@ pip install lognerve-py
 import lognerve
 
 lognerve.initialize(
-    api_key="lnv_sk_p3zI8Nnk3VkD-P0rBfjSTeWd4XCA6l-IrEmI3rWyFTI",
+    api_key="lnv_sk_example",
     domain="api.lognerve.ai",
     project_name="agent-examples",
     service_name="vanilla-tool-loop",
