@@ -3,7 +3,7 @@
 Small Python SDK for tracing agentic and LLM applications with LogNerve.
 
 ```bash
-pip install lognerve
+pip install lognerve-py
 ```
 
 ```python

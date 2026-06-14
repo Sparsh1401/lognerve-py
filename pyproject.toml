@@ -1,5 +1,5 @@
 [project]
-name = "lognerve"
+name = "lognerve-py"
 version = "0.1.0"
 description = "Python SDK for tracing LLM and agent applications with LogNerve"
 readme = "README.md"
