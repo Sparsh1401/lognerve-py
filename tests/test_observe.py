@@ -25,10 +25,12 @@ def setup_function():
 
 
 def test_root_package_api_is_minimal():
-    assert sorted(lognerve.__all__) == ["initialize", "observe", "usingAttributes"]
+    assert sorted(lognerve.__all__) == ["flush", "initialize", "observe", "shutdown", "usingAttributes"]
     assert callable(lognerve.initialize)
     assert callable(lognerve.observe)
     assert callable(lognerve.usingAttributes)
+    assert callable(lognerve.flush)
+    assert callable(lognerve.shutdown)
 
 
 def test_redacts_common_pii_with_local_regex_rules():

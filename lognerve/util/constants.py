@@ -1,7 +1,7 @@
 from enum import Enum
 
 SDK_NAME = "lognerve-python-sdk"
-SDK_VERSION = "0.1.1"
+SDK_VERSION = "0.1.2"
 TRACER_NAME = "lognerve"
 
 SPAN_KIND = "openinference.span.kind"

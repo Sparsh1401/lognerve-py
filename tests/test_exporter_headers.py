@@ -6,7 +6,7 @@ def test_build_headers_adds_sdk_identity_and_authorization():
     headers = build_headers(api_key="test-key")
 
     assert headers["x-lognerve-sdk-name"] == "lognerve-python-sdk"
-    assert headers["x-lognerve-sdk-version"] == "0.1.1"
+    assert headers["x-lognerve-sdk-version"] == "0.1.2"
     assert headers["Authorization"] == "Bearer test-key"
 
 
